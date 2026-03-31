@@ -6,6 +6,10 @@
 scrcpy --turn-screen-off --screen-off-key --stay-awake --always-on-top --no-audio
 ```
 
+For this fork Windows package, `scrcpy-console.bat` and `scrcpy-noconsole.vbs`
+already apply these defaults automatically:
+`--turn-screen-off --screen-off-key --stay-awake --no-audio`.
+
 Short form:
 
 ```bash
