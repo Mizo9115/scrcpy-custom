@@ -32,6 +32,7 @@ src = [
     'src/recorder.c',
     'src/scrcpy.c',
     'src/screen.c',
+    'src/sidebar.c',
     'src/server.c',
     'src/version.c',
     'src/hid/hid_gamepad.c',

@@ -50,6 +50,24 @@ public final class CleanUp {
     }
 
     private void runCleanUp(Options options) {
+        // Read before any other settings changes (for --screen-off-key brightness restore on exit)
+        String restoreScreenBrightnessArg = "";
+        String restoreScreenBrightnessModeArg = "";
+        if (options.getScreenOffKey()) {
+            try {
+                String b = Settings.getValue(Settings.TABLE_SYSTEM, "screen_brightness");
+                String m = Settings.getValue(Settings.TABLE_SYSTEM, "screen_brightness_mode");
+                if (b != null) {
+                    restoreScreenBrightnessArg = b;
+                }
+                if (m != null) {
+                    restoreScreenBrightnessModeArg = m;
+                }
+            } catch (SettingsException e) {
+                Ln.e("Could not read screen brightness settings for cleanup", e);
+            }
+        }
+
         boolean disableShowTouches = false;
         if (options.getShowTouches()) {
             try {
@@ -114,16 +132,20 @@ public final class CleanUp {
         }
 
         boolean powerOffScreen = options.getPowerOffScreenOnClose();
+        boolean screenOffKey = options.getScreenOffKey();
 
         try {
-            run(displayId, restoreStayOn, disableShowTouches, powerOffScreen, restoreScreenOffTimeout, restoreDisplayImePolicy);
+            run(displayId, restoreStayOn, disableShowTouches, powerOffScreen, restoreScreenOffTimeout,
+                    restoreDisplayImePolicy, screenOffKey, restoreScreenBrightnessArg,
+                    restoreScreenBrightnessModeArg);
         } catch (IOException e) {
             Ln.e("Clean up I/O exception", e);
         }
     }
 
     private void run(int displayId, int restoreStayOn, boolean disableShowTouches, boolean powerOffScreen, int restoreScreenOffTimeout,
-            int restoreDisplayImePolicy) throws IOException {
+            int restoreDisplayImePolicy, boolean screenOffKey, String restoreScreenBrightnessArg,
+            String restoreScreenBrightnessModeArg) throws IOException {
         String[] cmd = {
                 "app_process",
                 "/",
@@ -134,6 +156,9 @@ public final class CleanUp {
                 String.valueOf(powerOffScreen),
                 String.valueOf(restoreScreenOffTimeout),
                 String.valueOf(restoreDisplayImePolicy),
+                String.valueOf(screenOffKey),
+                restoreScreenBrightnessArg,
+                restoreScreenBrightnessModeArg,
         };
 
         ProcessBuilder builder = new ProcessBuilder(cmd);
@@ -204,6 +229,9 @@ public final class CleanUp {
         boolean powerOffScreen = Boolean.parseBoolean(args[3]);
         int restoreScreenOffTimeout = Integer.parseInt(args[4]);
         int restoreDisplayImePolicy = Integer.parseInt(args[5]);
+        boolean screenOffKey = Boolean.parseBoolean(args[6]);
+        String restoreScreenBrightnessArg = args[7];
+        String restoreScreenBrightnessModeArg = args[8];
 
         // Dynamic option
         boolean restoreDisplayPower = false;
@@ -256,13 +284,29 @@ public final class CleanUp {
 
         // Change the power of the main display when mirroring a virtual display
         int targetDisplayId = displayId != Device.DISPLAY_ID_NONE ? displayId : 0;
-        if (Device.isScreenOn(targetDisplayId)) {
-            if (powerOffScreen) {
-                Ln.i("Power off screen");
-                Device.powerOffScreen(targetDisplayId);
-            } else if (restoreDisplayPower) {
+        if (powerOffScreen) {
+            Ln.i("Power off screen");
+            Device.powerOffScreen(targetDisplayId);
+        } else if (restoreDisplayPower && !screenOffKey) {
+            if (Device.isScreenOn(targetDisplayId)) {
                 Ln.i("Restoring display power");
                 Device.setDisplayPower(targetDisplayId, true);
+            }
+        }
+
+        if (screenOffKey) {
+            if (!restoreScreenBrightnessArg.isEmpty() || !restoreScreenBrightnessModeArg.isEmpty()) {
+                Ln.i("Restoring screen brightness settings");
+                try {
+                    if (!restoreScreenBrightnessArg.isEmpty()) {
+                        Settings.putValue(Settings.TABLE_SYSTEM, "screen_brightness", restoreScreenBrightnessArg);
+                    }
+                    if (!restoreScreenBrightnessModeArg.isEmpty()) {
+                        Settings.putValue(Settings.TABLE_SYSTEM, "screen_brightness_mode", restoreScreenBrightnessModeArg);
+                    }
+                } catch (SettingsException e) {
+                    Ln.e("Could not restore screen brightness settings", e);
+                }
             }
         }
 

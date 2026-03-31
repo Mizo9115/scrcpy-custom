@@ -109,6 +109,7 @@ enum {
     OPT_LIST_APPS,
     OPT_START_APP,
     OPT_SCREEN_OFF_TIMEOUT,
+    OPT_SCREEN_OFF_KEY,
     OPT_CAPTURE_ORIENTATION,
     OPT_ANGLE,
     OPT_NO_VD_SYSTEM_DECORATIONS,
@@ -858,6 +859,13 @@ static const struct sc_option options[] = {
         .shortopt = 'S',
         .longopt = "turn-screen-off",
         .text = "Turn the device screen off immediately.",
+    },
+    {
+        .longopt_id = OPT_SCREEN_OFF_KEY,
+        .longopt = "screen-off-key",
+        .text = "Turn the device screen off by setting brightness to minimum instead "
+                "of using display power mode (keeps the device interactive so Bluetooth "
+                "audio and PC mirroring keep working). Requires --turn-screen-off.",
     },
     {
         .longopt_id = OPT_SCREEN_OFF_TIMEOUT,
@@ -2497,6 +2505,9 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
             case 'S':
                 opts->turn_screen_off = true;
                 break;
+            case OPT_SCREEN_OFF_KEY:
+                opts->screen_off_key = true;
+                break;
             case 't':
                 opts->show_touches = true;
                 break;
@@ -3250,6 +3261,11 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
             LOGE("Cannot request to turn screen off if control is disabled");
             return false;
         }
+        if (opts->screen_off_key) {
+            LOGE("Cannot request to turn screen off using the POWER key if "
+                 "control is disabled");
+            return false;
+        }
         if (opts->stay_awake) {
             LOGE("Cannot request to stay awake if control is disabled");
             return false;
@@ -3266,6 +3282,11 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
             LOGE("Cannot start an Android app if control is disabled");
             return false;
         }
+    }
+
+    if (opts->screen_off_key && !opts->turn_screen_off) {
+        LOGE("--screen-off-key requires --turn-screen-off");
+        return false;
     }
 
 # ifdef _WIN32
@@ -3293,6 +3314,10 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
         }
         if (opts->turn_screen_off) {
             LOGE("OTG mode: could not turn screen off");
+            return false;
+        }
+        if (opts->screen_off_key) {
+            LOGE("OTG mode: could not turn screen off via the POWER key");
             return false;
         }
         if (opts->stay_awake) {

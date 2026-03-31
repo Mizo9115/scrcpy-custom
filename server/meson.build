@@ -12,12 +12,16 @@ if prebuilt_server == ''
                   install: true,
                   install_dir: 'share/scrcpy')
 else
-    if not prebuilt_server.startswith('/')
-        # prebuilt server path is relative to the root scrcpy directory
-        prebuilt_server = '../' + prebuilt_server
+    # get_option() yields OptionStringHolder, not str — coerce before path checks.
+    ps = '' + prebuilt_server
+    # Relative paths are from the repo root. Unix absolute paths start with '/'; Windows
+    # paths are normalized to 'C:/...' (second char is ':').
+    is_abs = ps.startswith('/') or ps.contains(':/')
+    if not is_abs
+        ps = '../' + ps
     endif
     custom_target('scrcpy-server-prebuilt',
-                  input: prebuilt_server,
+                  input: ps,
                   output: 'scrcpy-server',
                   command: ['cp', '@INPUT@', '@OUTPUT@'],
                   install: true,

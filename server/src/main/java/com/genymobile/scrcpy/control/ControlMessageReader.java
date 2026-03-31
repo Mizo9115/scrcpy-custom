@@ -47,6 +47,7 @@ public class ControlMessageReader {
             case ControlMessage.TYPE_ROTATE_DEVICE:
             case ControlMessage.TYPE_OPEN_HARD_KEYBOARD_SETTINGS:
             case ControlMessage.TYPE_RESET_VIDEO:
+            case ControlMessage.TYPE_FORCE_CLOSE_APP:
                 return ControlMessage.createEmpty(type);
             case ControlMessage.TYPE_UHID_CREATE:
                 return parseUhidCreate();

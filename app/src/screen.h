@@ -18,6 +18,7 @@
 #include "input_manager.h"
 #include "mouse_capture.h"
 #include "options.h"
+#include "sidebar.h"
 #include "trait/key_processor.h"
 #include "trait/frame_sink.h"
 #include "trait/mouse_processor.h"
@@ -32,6 +33,7 @@ struct sc_screen {
     bool video;
 
     struct sc_display display;
+    struct sc_sidebar sidebar;
     struct sc_input_manager im;
     struct sc_mouse_capture mc; // only used in mouse relative mode
     struct sc_frame_buffer fb;

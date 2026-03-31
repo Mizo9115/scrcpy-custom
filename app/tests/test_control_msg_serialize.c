@@ -446,6 +446,21 @@ static void test_serialize_reset_video(void) {
     assert(!memcmp(buf, expected, sizeof(expected)));
 }
 
+static void test_serialize_force_close_app(void) {
+    struct sc_control_msg msg = {
+        .type = SC_CONTROL_MSG_TYPE_FORCE_CLOSE_APP,
+    };
+
+    uint8_t buf[SC_CONTROL_MSG_MAX_SIZE];
+    size_t size = sc_control_msg_serialize(&msg, buf);
+    assert(size == 1);
+
+    const uint8_t expected[] = {
+        SC_CONTROL_MSG_TYPE_FORCE_CLOSE_APP,
+    };
+    assert(!memcmp(buf, expected, sizeof(expected)));
+}
+
 int main(int argc, char *argv[]) {
     (void) argc;
     (void) argv;
@@ -470,5 +485,6 @@ int main(int argc, char *argv[]) {
     test_serialize_open_hard_keyboard();
     test_serialize_start_app();
     test_serialize_reset_video();
+    test_serialize_force_close_app();
     return 0;
 }

@@ -12,6 +12,8 @@ import com.genymobile.scrcpy.device.Position;
 import com.genymobile.scrcpy.device.Size;
 import com.genymobile.scrcpy.util.Ln;
 import com.genymobile.scrcpy.util.LogUtils;
+import com.genymobile.scrcpy.util.Settings;
+import com.genymobile.scrcpy.util.SettingsException;
 import com.genymobile.scrcpy.video.SurfaceCapture;
 import com.genymobile.scrcpy.video.VirtualDisplayListener;
 import com.genymobile.scrcpy.wrappers.ClipboardManager;
@@ -68,6 +70,9 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
     // control_msg.h values of the pointerId field in inject_touch_event message
     private static final int POINTER_ID_MOUSE = -1;
 
+    private static final String KEY_SCREEN_BRIGHTNESS = "screen_brightness";
+    private static final String KEY_SCREEN_BRIGHTNESS_MODE = "screen_brightness_mode";
+
     private static final ScheduledExecutorService EXECUTOR = Executors.newSingleThreadScheduledExecutor();
     private ExecutorService startAppExecutor;
 
@@ -82,6 +87,7 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
     private final DeviceMessageSender sender;
     private final boolean clipboardAutosync;
     private final boolean powerOn;
+    private final boolean screenOffKey;
 
     private final KeyCharacterMap charMap = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD);
 
@@ -97,6 +103,14 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
 
     private boolean keepDisplayPowerOff;
 
+    /**
+     * When {@code --screen-off-key} is used, screen "off" is implemented by setting brightness to 0 (device stays interactive).
+     * These hold the values to restore when turning the screen back on.
+     */
+    private String savedScreenBrightness;
+    private String savedScreenBrightnessMode;
+    private boolean screenBrightnessDimmed;
+
     // Used for resetting video encoding on RESET_VIDEO message
     private SurfaceCapture surfaceCapture;
 
@@ -106,6 +120,7 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
         this.cleanUp = cleanUp;
         this.clipboardAutosync = options.getClipboardAutosync();
         this.powerOn = options.getPowerOn();
+        this.screenOffKey = options.getScreenOffKey();
         initPointers();
         sender = new DeviceMessageSender(controlChannel);
 
@@ -331,6 +346,9 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
             case ControlMessage.TYPE_RESET_VIDEO:
                 resetVideo();
                 break;
+            case ControlMessage.TYPE_FORCE_CLOSE_APP:
+                forceCloseForegroundApp();
+                break;
             default:
                 // do nothing
         }
@@ -544,10 +562,14 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
     /**
      * Schedule a call to set display power to off after a small delay.
      */
-    private static void scheduleDisplayPowerOff(int displayId) {
+    private void scheduleDisplayPowerOff(int displayId) {
         EXECUTOR.schedule(() -> {
             Ln.i("Forcing display off");
-            Device.setDisplayPower(displayId, false);
+            if (screenOffKey) {
+                applyBrightnessBasedScreenOff();
+            } else {
+                Device.setDisplayPower(displayId, false);
+            }
         }, 200, TimeUnit.MILLISECONDS);
     }
 
@@ -733,19 +755,91 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
         }
     }
 
+    /**
+     * {@code --screen-off-key}: dim to black via brightness 0 + manual mode (device stays interactive; scrcpy + BT audio keep working).
+     */
+    private boolean applyBrightnessBasedScreenOff() {
+        if (screenBrightnessDimmed) {
+            return true;
+        }
+        try {
+            savedScreenBrightness = Settings.getValue(Settings.TABLE_SYSTEM, KEY_SCREEN_BRIGHTNESS);
+            savedScreenBrightnessMode = Settings.getValue(Settings.TABLE_SYSTEM, KEY_SCREEN_BRIGHTNESS_MODE);
+            Settings.putValue(Settings.TABLE_SYSTEM, KEY_SCREEN_BRIGHTNESS, "0");
+            Settings.putValue(Settings.TABLE_SYSTEM, KEY_SCREEN_BRIGHTNESS_MODE, "0");
+            screenBrightnessDimmed = true;
+            return true;
+        } catch (SettingsException e) {
+            Ln.e("Could not set screen brightness to 0", e);
+            return false;
+        }
+    }
+
+    private boolean restoreBrightnessBasedScreenOn() {
+        if (!screenBrightnessDimmed) {
+            return true;
+        }
+        try {
+            if (savedScreenBrightness != null) {
+                Settings.putValue(Settings.TABLE_SYSTEM, KEY_SCREEN_BRIGHTNESS, savedScreenBrightness);
+            }
+            if (savedScreenBrightnessMode != null) {
+                Settings.putValue(Settings.TABLE_SYSTEM, KEY_SCREEN_BRIGHTNESS_MODE, savedScreenBrightnessMode);
+            }
+            screenBrightnessDimmed = false;
+            savedScreenBrightness = null;
+            savedScreenBrightnessMode = null;
+            return true;
+        } catch (SettingsException e) {
+            Ln.e("Could not restore screen brightness", e);
+            return false;
+        }
+    }
+
     private void setDisplayPower(boolean on) {
-        // Change the power of the main display when mirroring a virtual display
-        int targetDisplayId = displayId != Device.DISPLAY_ID_NONE ? displayId : 0;
-        boolean setDisplayPowerOk = Device.setDisplayPower(targetDisplayId, on);
+        boolean setDisplayPowerOk;
+        if (screenOffKey) {
+            if (!on) {
+                setDisplayPowerOk = applyBrightnessBasedScreenOff();
+            } else {
+                setDisplayPowerOk = restoreBrightnessBasedScreenOn();
+            }
+        } else {
+            // Change the power of the main display when mirroring a virtual display
+            int targetDisplayId = displayId != Device.DISPLAY_ID_NONE ? displayId : 0;
+            setDisplayPowerOk = Device.setDisplayPower(targetDisplayId, on);
+        }
         if (setDisplayPowerOk) {
-            // Do not keep display power off for virtual displays: MOD+p must wake up the physical device
-            keepDisplayPowerOff = displayId != Device.DISPLAY_ID_NONE && !on;
-            Ln.i("Device display turned " + (on ? "on" : "off"));
-            if (cleanUp != null) {
-                boolean mustRestoreOnExit = !on;
-                cleanUp.setRestoreDisplayPower(mustRestoreOnExit);
+            // Brightness-based "off" keeps the device interactive; do not intercept POWER or use display-power cleanup.
+            if (!screenOffKey) {
+                // Do not keep display power off for virtual displays: MOD+p must wake up the physical device
+                keepDisplayPowerOff = displayId != Device.DISPLAY_ID_NONE && !on;
+                if (cleanUp != null) {
+                    boolean mustRestoreOnExit = !on;
+                    cleanUp.setRestoreDisplayPower(mustRestoreOnExit);
+                }
+            }
+            if (screenOffKey) {
+                Ln.i(on ? "Screen brightness restored" : "Screen brightness set to minimum (screen-off-key)");
+            } else {
+                Ln.i("Device display turned " + (on ? "on" : "off"));
             }
         }
+    }
+
+    private void forceCloseForegroundApp() {
+        String pkg = Device.getForegroundPackageOrNull();
+        if (pkg == null) {
+            Ln.w("Could not determine foreground app to force-stop");
+            return;
+        }
+        String lower = pkg.toLowerCase();
+        if (lower.contains("launcher") || "com.android.systemui".equals(pkg)) {
+            Ln.w("Refusing to force-stop: " + pkg);
+            return;
+        }
+        Ln.i("Force-stopping: " + pkg);
+        ServiceManager.getActivityManager().forceStopPackage(pkg);
     }
 
     private void resetVideo() {

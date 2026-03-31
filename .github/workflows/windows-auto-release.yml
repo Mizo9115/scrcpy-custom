@@ -1,0 +1,104 @@
+name: Windows Auto Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-auto-release
+  cancel-in-progress: true
+
+jobs:
+  build-and-release-win64:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build server APK
+        shell: pwsh
+        run: .\gradlew.bat -p server assembleRelease
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-ffmpeg
+            mingw-w64-x86_64-libusb
+
+      - name: Build Windows client
+        shell: msys2 {0}
+        run: |
+          set -euxo pipefail
+          meson setup build --buildtype=release \
+            -Dprebuilt_server=server/build/outputs/apk/release/server-release-unsigned.apk
+          ninja -C build
+
+      - name: Compute artifact name
+        id: meta
+        shell: pwsh
+        run: |
+          $short = "${env:GITHUB_SHA}".Substring(0, 7)
+          "short_sha=$short" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Copy-Item build/app/scrcpy.exe dist/
+          Copy-Item build/server/scrcpy-server dist/
+
+          $dllPatterns = @(
+            "SDL2.dll",
+            "avcodec-*.dll",
+            "avformat-*.dll",
+            "avutil-*.dll",
+            "swresample-*.dll",
+            "libusb-1.0.dll"
+          )
+          foreach ($pattern in $dllPatterns) {
+            Get-ChildItem "C:\msys64\mingw64\bin\$pattern" -ErrorAction Stop |
+              Copy-Item -Destination dist/
+          }
+
+          "Built from commit $env:GITHUB_SHA" | Out-File -FilePath dist/BUILD_INFO.txt -Encoding utf8
+
+          $zipName = "scrcpy-win64-custom-${{ steps.meta.outputs.short_sha }}.zip"
+          if (Test-Path $zipName) { Remove-Item $zipName -Force }
+          Compress-Archive -Path dist\* -DestinationPath $zipName
+          "zip_name=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        id: pkg
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.zip_name }}
+          path: ${{ steps.pkg.outputs.zip_name }}
+
+      - name: Publish/update nightly release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: Nightly (main)
+          make_latest: false
+          prerelease: true
+          files: ${{ steps.pkg.outputs.zip_name }}

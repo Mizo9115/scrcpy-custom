@@ -368,6 +368,9 @@ execute_server(struct sc_server *server,
         uint64_t ms = SC_TICK_TO_MS(params->screen_off_timeout);
         ADD_PARAM("screen_off_timeout=%" PRIu64, ms);
     }
+    if (params->screen_off_key) {
+        ADD_PARAM("screen_off_key=true");
+    }
     if (params->video_codec_options) {
         VALIDATE_STRING(params->video_codec_options);
         ADD_PARAM("video_codec_options=%s", params->video_codec_options);

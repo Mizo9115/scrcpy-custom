@@ -291,6 +291,7 @@ struct scrcpy_options {
     bool video_playback;
     bool audio_playback;
     bool turn_screen_off;
+    bool screen_off_key;
     enum sc_key_inject_mode key_inject_mode;
     bool window_borderless;
     bool mipmaps;

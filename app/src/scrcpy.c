@@ -442,6 +442,7 @@ scrcpy(struct scrcpy_options *options) {
         .max_fps = options->max_fps,
         .angle = options->angle,
         .screen_off_timeout = options->screen_off_timeout,
+        .screen_off_key = options->screen_off_key,
         .capture_orientation = options->capture_orientation,
         .capture_orientation_lock = options->capture_orientation_lock,
         .control = options->control,

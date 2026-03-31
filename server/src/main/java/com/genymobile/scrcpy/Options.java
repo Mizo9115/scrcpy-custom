@@ -49,6 +49,7 @@ public class Options {
     private boolean showTouches;
     private boolean stayAwake;
     private int screenOffTimeout = -1;
+    private boolean screenOffKey;
     private int displayImePolicy = -1;
     private List<CodecOption> videoCodecOptions;
     private List<CodecOption> audioCodecOptions;
@@ -186,6 +187,10 @@ public class Options {
 
     public int getScreenOffTimeout() {
         return screenOffTimeout;
+    }
+
+    public boolean getScreenOffKey() {
+        return screenOffKey;
     }
 
     public int getDisplayImePolicy() {
@@ -398,6 +403,9 @@ public class Options {
                     if (options.screenOffTimeout < -1) {
                         throw new IllegalArgumentException("Invalid screen off timeout: " + options.screenOffTimeout);
                     }
+                    break;
+                case "screen_off_key":
+                    options.screenOffKey = Boolean.parseBoolean(value);
                     break;
                 case "video_codec_options":
                     options.videoCodecOptions = CodecOption.parse(value);

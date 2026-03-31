@@ -45,6 +45,7 @@ struct sc_server_params {
     const char *max_fps; // float to be parsed by the server
     const char *angle; // float to be parsed by the server
     sc_tick screen_off_timeout;
+    bool screen_off_key;
     enum sc_orientation capture_orientation;
     enum sc_orientation_lock capture_orientation_lock;
     bool control;

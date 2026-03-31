@@ -12,6 +12,7 @@ import com.genymobile.scrcpy.wrappers.SurfaceControl;
 import com.genymobile.scrcpy.wrappers.WindowManager;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.Intent;
 import android.app.ActivityOptions;
 import android.content.pm.ApplicationInfo;
@@ -311,5 +312,47 @@ public final class Device {
             am.forceStopPackage(packageName);
         }
         am.startActivity(launchIntent, options);
+    }
+
+    /**
+     * Best-effort foreground package (for force-stop). May return null on some
+     * Android versions / restrictions.
+     */
+    @SuppressLint("deprecation")
+    public static String getForegroundPackageOrNull() {
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager) FakeContext.get()
+                    .getSystemService(Context.ACTIVITY_SERVICE);
+            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                List<android.app.ActivityManager.RunningTaskInfo> tasks =
+                        am.getRunningTasks(1);
+                if (tasks != null && !tasks.isEmpty()) {
+                    android.content.ComponentName cn = tasks.get(0).topActivity;
+                    if (cn != null) {
+                        return cn.getPackageName();
+                    }
+                }
+            }
+            List<android.app.ActivityManager.RunningAppProcessInfo> processes =
+                    am.getRunningAppProcesses();
+            if (processes != null) {
+                for (android.app.ActivityManager.RunningAppProcessInfo pi : processes) {
+                    if (pi.importance == android.app.ActivityManager.RunningAppProcessInfo
+                            .IMPORTANCE_FOREGROUND) {
+                        String name = pi.processName;
+                        if (name != null) {
+                            int colon = name.indexOf(':');
+                            if (colon > 0) {
+                                name = name.substring(0, colon);
+                            }
+                            return name;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Ln.e("Could not get foreground package", e);
+        }
+        return null;
     }
 }

@@ -7,6 +7,7 @@
 #include "events.h"
 #include "icon.h"
 #include "options.h"
+#include "sidebar.h"
 #include "util/log.h"
 
 #define DISPLAY_MARGINS 96
@@ -216,6 +217,10 @@ sc_screen_render(struct sc_screen *screen, bool update_content_rect) {
     enum sc_display_result res =
         sc_display_render(&screen->display, &screen->rect, screen->orientation);
     (void) res; // any error already logged
+    if (screen->sidebar.enabled) {
+        sc_sidebar_render(&screen->sidebar, screen, screen->display.renderer);
+    }
+    sc_display_present(&screen->display);
 }
 
 static void
@@ -223,6 +228,7 @@ sc_screen_render_novideo(struct sc_screen *screen) {
     enum sc_display_result res =
         sc_display_render(&screen->display, NULL, SC_ORIENTATION_0);
     (void) res; // any error already logged
+    sc_display_present(&screen->display);
 }
 
 #if defined(__APPLE__) || defined(_WIN32)
@@ -444,6 +450,9 @@ sc_screen_init(struct sc_screen *screen,
 
     sc_input_manager_init(&screen->im, &im_params);
 
+    sc_sidebar_init(&screen->sidebar, params->controller, screen->window,
+                    params->always_on_top);
+
     // Initialize even if not used for simplicity
     sc_mouse_capture_init(&screen->mc, screen->window, params->shortcut_mods);
 
@@ -530,6 +539,7 @@ sc_screen_destroy(struct sc_screen *screen) {
 #ifndef NDEBUG
     assert(!screen->open);
 #endif
+    sc_sidebar_destroy(&screen->sidebar);
     sc_display_destroy(&screen->display);
     av_frame_free(&screen->frame);
     SDL_DestroyWindow(screen->window);
@@ -859,6 +869,15 @@ sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                     break;
             }
             return true;
+    }
+
+    if (screen->video && screen->sidebar.enabled) {
+        if (event->type == SDL_MOUSEMOTION || event->type == SDL_MOUSEBUTTONDOWN
+                || event->type == SDL_MOUSEBUTTONUP) {
+            if (sc_sidebar_handle_event(&screen->sidebar, screen, event)) {
+                return true;
+            }
+        }
     }
 
     if (sc_screen_is_relative_mode(screen)
