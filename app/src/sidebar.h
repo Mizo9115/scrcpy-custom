@@ -20,9 +20,13 @@ struct sc_sidebar {
     int last_mx;
     int last_my;
 
-    int hover_button; /* -1 if none, 0..3 for four buttons */
+    int hover_button; /* -1 if none, 0..4 for five buttons */
     bool phone_screen_dimmed;
     bool always_on_top;
+    bool compact_window_size;
+    bool default_window_size_saved;
+    int default_window_w;
+    int default_window_h;
 };
 
 void

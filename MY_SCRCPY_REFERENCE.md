@@ -45,12 +45,13 @@ This will:
 
 ## Sidebar (this fork)
 
-Move the mouse to the **left edge** of the scrcpy window (within about 8px) to reveal a panel with four buttons (top to bottom):
+Move the mouse to the **left edge** of the scrcpy window (within about 8px) to reveal a panel with five buttons (top to bottom):
 
 1. **Screen dim / restore** — same as toggling display power (pairs with `--turn-screen-off` / `--screen-off-key` behavior on the device).
 2. **Back** — injects Android `BACK`.
 3. **Force-close** — `am force-stop` on the current foreground app (blocked for launcher / System UI).
 4. **Always on top** — toggles the scrcpy window on the PC.
+5. **Window size toggle** — switch between the default window size and `400x200`.
 
 Requires control enabled (not `--no-control`). Rebuild both the **client** and **server** APK after pulling changes.
 

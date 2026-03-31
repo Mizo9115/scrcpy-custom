@@ -1,6 +1,7 @@
 #include "sidebar.h"
 
 #include <assert.h>
+#include <string.h>
 
 #include "android/input.h"
 #include "android/keycodes.h"
@@ -15,6 +16,9 @@
 #define SC_SIDEBAR_GAP 8
 #define SC_SIDEBAR_HIDE_DELAY SC_TICK_FROM_MS(500)
 #define SC_SIDEBAR_PAD 8
+#define SC_SIDEBAR_BUTTON_COUNT 5
+#define SC_SIDEBAR_COMPACT_W 400
+#define SC_SIDEBAR_COMPACT_H 200
 
 static void
 sidebar_mouse_to_drawable(struct sc_screen *screen, int *x, int *y) {
@@ -27,14 +31,15 @@ sidebar_pick_button(struct sc_sidebar *sb, int dw, int dh, int mx, int my) {
     if (!sb->panel_visible || mx >= SC_SIDEBAR_WIDTH) {
         return -1;
     }
-    int total_h = 4 * SC_SIDEBAR_BTN + 3 * SC_SIDEBAR_GAP;
+    int total_h = SC_SIDEBAR_BUTTON_COUNT * SC_SIDEBAR_BTN
+                + (SC_SIDEBAR_BUTTON_COUNT - 1) * SC_SIDEBAR_GAP;
     int start_y = (dh - total_h) / 2;
     if (my < start_y || my >= start_y + total_h) {
         return -1;
     }
     int rel = my - start_y;
     int slot = rel / (SC_SIDEBAR_BTN + SC_SIDEBAR_GAP);
-    if (slot < 0 || slot > 3) {
+    if (slot < 0 || slot >= SC_SIDEBAR_BUTTON_COUNT) {
         return -1;
     }
     int y0 = start_y + slot * (SC_SIDEBAR_BTN + SC_SIDEBAR_GAP);
@@ -117,6 +122,28 @@ sidebar_dispatch(struct sc_sidebar *sb, int button_index) {
             sb->always_on_top = !sb->always_on_top;
             SDL_SetWindowAlwaysOnTop(sb->window,
                                      sb->always_on_top ? SDL_TRUE : SDL_FALSE);
+            return true;
+        }
+        case 4: { /* Window size toggle: default <-> 400x200 */
+            if (!sb->compact_window_size) {
+                int w;
+                int h;
+                SDL_GetWindowSize(sb->window, &w, &h);
+                if (w > 0 && h > 0) {
+                    sb->default_window_w = w;
+                    sb->default_window_h = h;
+                    sb->default_window_size_saved = true;
+                }
+                SDL_SetWindowSize(sb->window, SC_SIDEBAR_COMPACT_W,
+                                  SC_SIDEBAR_COMPACT_H);
+                sb->compact_window_size = true;
+            } else {
+                if (sb->default_window_size_saved) {
+                    SDL_SetWindowSize(sb->window, sb->default_window_w,
+                                      sb->default_window_h);
+                }
+                sb->compact_window_size = false;
+            }
             return true;
         }
         default:
@@ -245,6 +272,17 @@ sidebar_draw_icon_pin(SDL_Renderer *r, const SDL_Rect *b, bool hover,
     SDL_RenderDrawRect(r, &head);
 }
 
+static void
+sidebar_draw_icon_resize(SDL_Renderer *r, const SDL_Rect *b, bool hover,
+                         bool active) {
+    Uint8 c = (active || hover) ? 240 : 180;
+    SDL_SetRenderDrawColor(r, c, c, c, 255);
+    SDL_Rect outer = {b->x + 8, b->y + 11, b->w - 16, b->h - 18};
+    SDL_RenderDrawRect(r, &outer);
+    SDL_Rect inner = {b->x + 13, b->y + 16, b->w - 26, b->h - 28};
+    SDL_RenderDrawRect(r, &inner);
+}
+
 void
 sc_sidebar_render(struct sc_sidebar *sb, struct sc_screen *screen,
                     SDL_Renderer *renderer) {
@@ -268,14 +306,17 @@ sc_sidebar_render(struct sc_sidebar *sb, struct sc_screen *screen,
     SDL_SetRenderDrawColor(renderer, 20, 20, 24, 200);
     SDL_RenderFillRect(renderer, &panel);
 
-    int total_h = 4 * SC_SIDEBAR_BTN + 3 * SC_SIDEBAR_GAP;
+    int total_h = SC_SIDEBAR_BUTTON_COUNT * SC_SIDEBAR_BTN
+                + (SC_SIDEBAR_BUTTON_COUNT - 1) * SC_SIDEBAR_GAP;
     int start_y = (dh - total_h) / 2;
 
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < SC_SIDEBAR_BUTTON_COUNT; ++i) {
         int y = start_y + i * (SC_SIDEBAR_BTN + SC_SIDEBAR_GAP);
         SDL_Rect btn = {SC_SIDEBAR_PAD, y, SC_SIDEBAR_BTN, SC_SIDEBAR_BTN};
         bool hover = (sb->hover_button == i);
-        if (i == 3 && sb->always_on_top) {
+        bool active = (i == 3 && sb->always_on_top)
+                   || (i == 4 && sb->compact_window_size);
+        if (active) {
             SDL_SetRenderDrawColor(renderer, 60, 80, 120, 220);
         } else if (hover) {
             SDL_SetRenderDrawColor(renderer, 70, 70, 80, 240);
@@ -298,6 +339,10 @@ sc_sidebar_render(struct sc_sidebar *sb, struct sc_screen *screen,
                 break;
             case 3:
                 sidebar_draw_icon_pin(renderer, &btn, hover, sb->always_on_top);
+                break;
+            case 4:
+                sidebar_draw_icon_resize(renderer, &btn, hover,
+                                         sb->compact_window_size);
                 break;
         }
     }
