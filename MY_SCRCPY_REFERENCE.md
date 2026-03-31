@@ -10,6 +10,10 @@ For this fork Windows package, `scrcpy-console.bat` and `scrcpy-noconsole.vbs`
 already apply these defaults automatically:
 `--turn-screen-off --screen-off-key --stay-awake --no-audio`.
 
+Also in this fork, the executable default disables audio forwarding
+(`--no-audio` behavior), so launching `scrcpy.exe` directly still keeps audio on
+the phone/Bluetooth by default.
+
 Short form:
 
 ```bash
