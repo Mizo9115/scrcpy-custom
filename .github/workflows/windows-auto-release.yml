@@ -50,6 +50,7 @@ jobs:
         run: |
           set -euxo pipefail
           meson setup build --buildtype=release \
+            -Dportable=true \
             -Dprebuilt_server=server/build/outputs/apk/release/server-release-unsigned.apk
           ninja -C build
 
@@ -67,6 +68,9 @@ jobs:
           mkdir -p dist
           cp build/app/scrcpy.exe dist/
           cp build/server/scrcpy-server dist/
+          cp app/data/scrcpy-console.bat dist/
+          cp app/data/open_a_terminal_here.bat dist/
+          cp app/data/scrcpy-noconsole.vbs dist/
           for f in $(ldd build/app/scrcpy.exe | awk '/\/mingw64\/bin\//{print $3}'); do
             cp "$f" dist/
           done
