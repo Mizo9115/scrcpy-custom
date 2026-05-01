@@ -66,6 +66,9 @@ struct sc_screen {
     bool fullscreen;
     bool maximized;
     bool minimized;
+    // After sending MEDIA_PAUSE+HOME for a PC minimize, suppress repeats until
+    // SDL_WINDOWEVENT_RESTORED (Windows may not emit MINIMIZED reliably).
+    bool minimize_pause_home_sent;
 
     AVFrame *frame;
 

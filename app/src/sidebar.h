@@ -3,9 +3,9 @@
 
 #include <stdbool.h>
 
-#include <SDL2/SDL.h>
-
 #include "util/tick.h"
+
+#include <SDL2/SDL.h>
 
 struct sc_controller;
 struct sc_screen;
