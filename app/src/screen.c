@@ -366,6 +366,7 @@ sc_screen_init(struct sc_screen *screen,
     screen->maximized = false;
     screen->minimized = false;
     screen->minimize_pause_home_sent = false;
+    screen->exit_pause_home_sent = false;
     screen->paused = false;
     screen->resume_frame = NULL;
     screen->orientation = SC_ORIENTATION_0;
@@ -860,6 +861,12 @@ inject_keycode_pair(struct sc_controller *controller,
     return true;
 }
 
+static void
+inject_pause_home_to_device(struct sc_controller *controller) {
+    inject_keycode_pair(controller, AKEYCODE_MEDIA_PAUSE, "MEDIA_PAUSE");
+    inject_keycode_pair(controller, AKEYCODE_HOME, "HOME");
+}
+
 // When the desktop window is minimized, pause device media and go Home so
 // fullscreen video (e.g. YouTube) stops and the launcher is shown.
 static void
@@ -875,8 +882,23 @@ sc_screen_minimize_pause_media_and_home(struct sc_screen *screen) {
 
     LOGD("PC window minimized: inject MEDIA_PAUSE then HOME");
 
-    inject_keycode_pair(controller, AKEYCODE_MEDIA_PAUSE, "MEDIA_PAUSE");
-    inject_keycode_pair(controller, AKEYCODE_HOME, "HOME");
+    inject_pause_home_to_device(controller);
+}
+
+void
+sc_screen_pause_media_and_home_on_exit(struct sc_screen *screen) {
+    struct sc_controller *controller = screen->im.controller;
+    if (!controller) {
+        return;
+    }
+    if (screen->exit_pause_home_sent) {
+        return;
+    }
+    screen->exit_pause_home_sent = true;
+
+    LOGD("PC scrcpy exit: inject MEDIA_PAUSE then HOME");
+
+    inject_pause_home_to_device(controller);
 }
 
 bool
@@ -932,6 +954,13 @@ sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                     break;
                 case SDL_WINDOWEVENT_RESTORED:
                     screen->minimize_pause_home_sent = false;
+                    break;
+                case SDL_WINDOWEVENT_CLOSE:
+                    if (screen->window
+                            && event->window.windowID
+                                    == SDL_GetWindowID(screen->window)) {
+                        sc_screen_pause_media_and_home_on_exit(screen);
+                    }
                     break;
                 default:
                     break;

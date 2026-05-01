@@ -69,6 +69,9 @@ struct sc_screen {
     // After sending MEDIA_PAUSE+HOME for a PC minimize, suppress repeats until
     // SDL_WINDOWEVENT_RESTORED (Windows may not emit MINIMIZED reliably).
     bool minimize_pause_home_sent;
+    // After sending MEDIA_PAUSE+HOME for window close / app quit, suppress
+    // duplicate sends (e.g. SDL_WINDOWEVENT_CLOSE then SDL_QUIT).
+    bool exit_pause_home_sent;
 
     AVFrame *frame;
 
@@ -151,6 +154,11 @@ sc_screen_set_orientation(struct sc_screen *screen,
 // set the display pause state
 void
 sc_screen_set_paused(struct sc_screen *screen, bool paused);
+
+// Pause device media and send HOME when the PC window is closed or the app
+// quits (SDL_QUIT). No-op without a controller. Idempotent for one exit.
+void
+sc_screen_pause_media_and_home_on_exit(struct sc_screen *screen);
 
 // react to SDL events
 // If this function returns false, scrcpy must exit with an error.

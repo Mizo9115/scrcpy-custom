@@ -200,6 +200,9 @@ event_loop(struct scrcpy *s, bool has_screen) {
                 return SCRCPY_EXIT_SUCCESS;
             case SDL_QUIT:
                 LOGD("User requested to quit");
+                if (has_screen) {
+                    sc_screen_pause_media_and_home_on_exit(&s->screen);
+                }
                 return SCRCPY_EXIT_SUCCESS;
             case SC_EVENT_RUN_ON_MAIN_THREAD: {
                 sc_runnable_fn run = event.user.data1;
