@@ -84,12 +84,12 @@ sidebar_dispatch(struct sc_sidebar *sb, int button_index) {
             }
             return true;
         }
-        case 1: { /* Back */
+        case 1: { /* Volume up */
             struct sc_control_msg down = {
                 .type = SC_CONTROL_MSG_TYPE_INJECT_KEYCODE,
                 .inject_keycode = {
                     .action = AKEY_EVENT_ACTION_DOWN,
-                    .keycode = AKEYCODE_BACK,
+                    .keycode = AKEYCODE_VOLUME_UP,
                     .repeat = 0,
                     .metastate = 0,
                 },
@@ -98,23 +98,39 @@ sidebar_dispatch(struct sc_sidebar *sb, int button_index) {
                 .type = SC_CONTROL_MSG_TYPE_INJECT_KEYCODE,
                 .inject_keycode = {
                     .action = AKEY_EVENT_ACTION_UP,
-                    .keycode = AKEYCODE_BACK,
+                    .keycode = AKEYCODE_VOLUME_UP,
                     .repeat = 0,
                     .metastate = 0,
                 },
             };
             if (!sc_controller_push_msg(sb->controller, &down)
                     || !sc_controller_push_msg(sb->controller, &up)) {
-                LOGW("Could not inject BACK");
+                LOGW("Could not inject VOLUME_UP");
             }
             return true;
         }
-        case 2: { /* Force-close foreground app */
-            struct sc_control_msg msg = {
-                .type = SC_CONTROL_MSG_TYPE_FORCE_CLOSE_APP,
+        case 2: { /* Volume down */
+            struct sc_control_msg down = {
+                .type = SC_CONTROL_MSG_TYPE_INJECT_KEYCODE,
+                .inject_keycode = {
+                    .action = AKEY_EVENT_ACTION_DOWN,
+                    .keycode = AKEYCODE_VOLUME_DOWN,
+                    .repeat = 0,
+                    .metastate = 0,
+                },
             };
-            if (!sc_controller_push_msg(sb->controller, &msg)) {
-                LOGW("Could not request force-close app");
+            struct sc_control_msg up = {
+                .type = SC_CONTROL_MSG_TYPE_INJECT_KEYCODE,
+                .inject_keycode = {
+                    .action = AKEY_EVENT_ACTION_UP,
+                    .keycode = AKEYCODE_VOLUME_DOWN,
+                    .repeat = 0,
+                    .metastate = 0,
+                },
+            };
+            if (!sc_controller_push_msg(sb->controller, &down)
+                    || !sc_controller_push_msg(sb->controller, &up)) {
+                LOGW("Could not inject VOLUME_DOWN");
             }
             return true;
         }
@@ -153,13 +169,15 @@ sidebar_dispatch(struct sc_sidebar *sb, int button_index) {
 
 void
 sc_sidebar_init(struct sc_sidebar *sb, struct sc_controller *controller,
-                SDL_Window *window, bool initial_always_on_top) {
+                SDL_Window *window, bool initial_always_on_top,
+                bool initial_screen_dimmed) {
     memset(sb, 0, sizeof(*sb));
     sb->controller = controller;
     sb->window = window;
     sb->enabled = controller != NULL;
     sb->hover_button = -1;
     sb->always_on_top = initial_always_on_top;
+    sb->phone_screen_dimmed = initial_screen_dimmed;
     sb->last_mx = -1;
     sb->last_my = -1;
 }
@@ -242,22 +260,36 @@ sidebar_draw_icon_power(SDL_Renderer *r, const SDL_Rect *b, bool hover) {
 }
 
 static void
-sidebar_draw_icon_back(SDL_Renderer *r, const SDL_Rect *b, bool hover) {
-    Uint8 c = hover ? 220 : 180;
-    SDL_SetRenderDrawColor(r, c, c, c, 255);
-    int x0 = b->x + 12;
-    int y0 = b->y + b->h / 2;
-    SDL_RenderDrawLine(r, x0 + 18, y0 - 10, x0, y0);
-    SDL_RenderDrawLine(r, x0, y0, x0 + 18, y0 + 10);
+sidebar_draw_icon_speaker(SDL_Renderer *r, const SDL_Rect *b) {
+    int cx = b->x + b->w / 2 - 4;
+    int cy = b->y + b->h / 2;
+    SDL_Rect body = {cx - 8, cy - 4, 8, 8};
+    SDL_RenderFillRect(r, &body);
+    SDL_RenderDrawLine(r, cx, cy - 8, cx + 6, cy - 12);
+    SDL_RenderDrawLine(r, cx + 6, cy - 12, cx + 6, cy + 12);
+    SDL_RenderDrawLine(r, cx + 6, cy + 12, cx, cy + 8);
+    SDL_RenderDrawLine(r, cx, cy + 8, cx, cy - 8);
 }
 
 static void
-sidebar_draw_icon_close(SDL_Renderer *r, const SDL_Rect *b, bool hover) {
+sidebar_draw_icon_volume_up(SDL_Renderer *r, const SDL_Rect *b, bool hover) {
     Uint8 c = hover ? 220 : 180;
     SDL_SetRenderDrawColor(r, c, c, c, 255);
-    int p = 12;
-    SDL_RenderDrawLine(r, b->x + p, b->y + p, b->x + b->w - p, b->y + b->h - p);
-    SDL_RenderDrawLine(r, b->x + b->w - p, b->y + p, b->x + p, b->y + b->h - p);
+    sidebar_draw_icon_speaker(r, b);
+    int px = b->x + b->w / 2 + 10;
+    int py = b->y + b->h / 2;
+    SDL_RenderDrawLine(r, px - 4, py, px + 4, py);
+    SDL_RenderDrawLine(r, px, py - 4, px, py + 4);
+}
+
+static void
+sidebar_draw_icon_volume_down(SDL_Renderer *r, const SDL_Rect *b, bool hover) {
+    Uint8 c = hover ? 220 : 180;
+    SDL_SetRenderDrawColor(r, c, c, c, 255);
+    sidebar_draw_icon_speaker(r, b);
+    int px = b->x + b->w / 2 + 10;
+    int py = b->y + b->h / 2;
+    SDL_RenderDrawLine(r, px - 4, py, px + 4, py);
 }
 
 static void
@@ -332,10 +364,10 @@ sc_sidebar_render(struct sc_sidebar *sb, struct sc_screen *screen,
                 sidebar_draw_icon_power(renderer, &btn, hover);
                 break;
             case 1:
-                sidebar_draw_icon_back(renderer, &btn, hover);
+                sidebar_draw_icon_volume_up(renderer, &btn, hover);
                 break;
             case 2:
-                sidebar_draw_icon_close(renderer, &btn, hover);
+                sidebar_draw_icon_volume_down(renderer, &btn, hover);
                 break;
             case 3:
                 sidebar_draw_icon_pin(renderer, &btn, hover, sb->always_on_top);

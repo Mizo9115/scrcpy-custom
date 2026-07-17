@@ -200,9 +200,6 @@ event_loop(struct scrcpy *s, bool has_screen) {
                 return SCRCPY_EXIT_SUCCESS;
             case SDL_QUIT:
                 LOGD("User requested to quit");
-                if (has_screen) {
-                    sc_screen_pause_media_and_home_on_exit(&s->screen);
-                }
                 return SCRCPY_EXIT_SUCCESS;
             case SC_EVENT_RUN_ON_MAIN_THREAD: {
                 sc_runnable_fn run = event.user.data1;
@@ -819,6 +816,7 @@ aoa_complete:
             .shortcut_mods = options->shortcut_mods,
             .window_title = window_title,
             .always_on_top = options->always_on_top,
+            .turn_screen_off = options->turn_screen_off,
             .window_x = options->window_x,
             .window_y = options->window_y,
             .window_width = options->window_width,

@@ -3,9 +3,9 @@
 
 #include <stdbool.h>
 
-#include "util/tick.h"
-
 #include <SDL2/SDL.h>
+
+#include "util/tick.h"
 
 struct sc_controller;
 struct sc_screen;
@@ -31,7 +31,8 @@ struct sc_sidebar {
 
 void
 sc_sidebar_init(struct sc_sidebar *sb, struct sc_controller *controller,
-                  SDL_Window *window, bool initial_always_on_top);
+                  SDL_Window *window, bool initial_always_on_top,
+                  bool initial_screen_dimmed);
 
 void
 sc_sidebar_destroy(struct sc_sidebar *sb);

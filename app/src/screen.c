@@ -11,35 +11,7 @@
 #include "sidebar.h"
 #include "util/log.h"
 
-#ifdef _WIN32
-# include <SDL2/SDL_syswm.h>
-# include <windows.h>
-#endif
-
 #define DISPLAY_MARGINS 96
-
-// True if the PC window is minimized. On Windows, SDL_GetWindowFlags() can
-// lag behind the real iconic state with some renderers; IsIconic() matches
-// the taskbar minimize button reliably.
-static bool
-pc_window_is_minimized(SDL_Window *window) {
-    if (!window) {
-        return false;
-    }
-    if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED) {
-        return true;
-    }
-#ifdef _WIN32
-    SDL_SysWMinfo info;
-    SDL_VERSION(&info.version);
-    if (!SDL_GetWindowWMInfo(window, &info)) {
-        return false;
-    }
-    return IsIconic(info.info.win.window);
-#else
-    return false;
-#endif
-}
 
 #define DOWNCAST(SINK) container_of(SINK, struct sc_screen, frame_sink)
 
@@ -366,7 +338,6 @@ sc_screen_init(struct sc_screen *screen,
     screen->maximized = false;
     screen->minimized = false;
     screen->minimize_pause_home_sent = false;
-    screen->exit_pause_home_sent = false;
     screen->paused = false;
     screen->resume_frame = NULL;
     screen->orientation = SC_ORIENTATION_0;
@@ -482,7 +453,7 @@ sc_screen_init(struct sc_screen *screen,
     sc_input_manager_init(&screen->im, &im_params);
 
     sc_sidebar_init(&screen->sidebar, params->controller, screen->window,
-                    params->always_on_top);
+                    params->always_on_top, params->turn_screen_off);
 
     // Initialize even if not used for simplicity
     sc_mouse_capture_init(&screen->mc, screen->window, params->shortcut_mods);
@@ -861,12 +832,6 @@ inject_keycode_pair(struct sc_controller *controller,
     return true;
 }
 
-static void
-inject_pause_home_to_device(struct sc_controller *controller) {
-    inject_keycode_pair(controller, AKEYCODE_MEDIA_PAUSE, "MEDIA_PAUSE");
-    inject_keycode_pair(controller, AKEYCODE_HOME, "HOME");
-}
-
 // When the desktop window is minimized, pause device media and go Home so
 // fullscreen video (e.g. YouTube) stops and the launcher is shown.
 static void
@@ -880,25 +845,8 @@ sc_screen_minimize_pause_media_and_home(struct sc_screen *screen) {
     }
     screen->minimize_pause_home_sent = true;
 
-    LOGD("PC window minimized: inject MEDIA_PAUSE then HOME");
-
-    inject_pause_home_to_device(controller);
-}
-
-void
-sc_screen_pause_media_and_home_on_exit(struct sc_screen *screen) {
-    struct sc_controller *controller = screen->im.controller;
-    if (!controller) {
-        return;
-    }
-    if (screen->exit_pause_home_sent) {
-        return;
-    }
-    screen->exit_pause_home_sent = true;
-
-    LOGD("PC scrcpy exit: inject MEDIA_PAUSE then HOME");
-
-    inject_pause_home_to_device(controller);
+    inject_keycode_pair(controller, AKEYCODE_MEDIA_PAUSE, "MEDIA_PAUSE");
+    inject_keycode_pair(controller, AKEYCODE_HOME, "HOME");
 }
 
 bool
@@ -931,9 +879,9 @@ sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
             assert(screen->video || !screen->has_frame);
 
             // Minimize handling must run even before the first video frame.
-            // On Windows, SDL_WINDOWEVENT_MINIMIZED is sometimes missing, and
-            // SDL_WINDOW_MINIMIZED can lag; use native iconic state and
-            // SIZE_CHANGED as extra hints.
+            // On Windows, SDL_WINDOWEVENT_MINIMIZED is sometimes missing; treat
+            // FOCUS_LOST/HIDDEN as minimize when SDL_GetWindowFlags reports
+            // SDL_WINDOW_MINIMIZED.
             switch (event->window.event) {
                 case SDL_WINDOWEVENT_MINIMIZED:
                     screen->minimized = true;
@@ -941,26 +889,15 @@ sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                     break;
                 case SDL_WINDOWEVENT_FOCUS_LOST:
                 case SDL_WINDOWEVENT_HIDDEN:
-                    if (pc_window_is_minimized(screen->window)) {
-                        screen->minimized = true;
-                        sc_screen_minimize_pause_media_and_home(screen);
-                    }
-                    break;
-                case SDL_WINDOWEVENT_SIZE_CHANGED:
-                    if (pc_window_is_minimized(screen->window)) {
+                    if (screen->window
+                            && (SDL_GetWindowFlags(screen->window)
+                                    & SDL_WINDOW_MINIMIZED)) {
                         screen->minimized = true;
                         sc_screen_minimize_pause_media_and_home(screen);
                     }
                     break;
                 case SDL_WINDOWEVENT_RESTORED:
                     screen->minimize_pause_home_sent = false;
-                    break;
-                case SDL_WINDOWEVENT_CLOSE:
-                    if (screen->window
-                            && event->window.windowID
-                                    == SDL_GetWindowID(screen->window)) {
-                        sc_screen_pause_media_and_home_on_exit(screen);
-                    }
                     break;
                 default:
                     break;

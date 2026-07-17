@@ -155,9 +155,8 @@ run_controller(void *data) {
                 && sc_vecdeque_is_empty(&controller->queue)) {
             sc_cond_wait(&controller->msg_cond, &controller->mutex);
         }
-        // After stop, still drain the queue so messages pushed just before
-        // shutdown (e.g. MEDIA_PAUSE + HOME on window close) are sent.
-        if (controller->stopped && sc_vecdeque_is_empty(&controller->queue)) {
+        if (controller->stopped) {
+            // stop immediately, do not process further msgs
             sc_mutex_unlock(&controller->mutex);
             LOGD("Controller stopped");
             break;

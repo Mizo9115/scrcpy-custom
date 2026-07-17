@@ -1,6 +1,16 @@
 # scrcpy Quick Reference
 
 ## Recommended Command
+moata@Moataz-MACS MINGW64 /c/Mizo/scrcpy
+MINGW64 
+
+run first:
+source ~/.bashrc
+which adb
+adb version
+
+run second:
+./run devbuild --turn-screen-off --screen-off-key --stay-awake --always-on-top --no-audio
 
 ```bash
 scrcpy --turn-screen-off --screen-off-key --stay-awake --always-on-top --no-audio
@@ -48,8 +58,8 @@ This will:
 Move the mouse to the **left edge** of the scrcpy window (within about 8px) to reveal a panel with five buttons (top to bottom):
 
 1. **Screen dim / restore** — same as toggling display power (pairs with `--turn-screen-off` / `--screen-off-key` behavior on the device).
-2. **Back** — injects Android `BACK`.
-3. **Force-close** — `am force-stop` on the current foreground app (blocked for launcher / System UI).
+2. **Volume Up** — injects Android `VOLUME_UP`.
+3. **Volume Down** — injects Android `VOLUME_DOWN`.
 4. **Always on top** — toggles the scrcpy window on the PC.
 5. **Window size toggle** — switch between the default window size and `400x200`.
 
@@ -72,3 +82,5 @@ MOD key = Left Alt or Left Super (Windows key)
 - **`--no-audio`** — All audio stays on the phone. Best for Bluetooth headphones connected to the phone.
 - **`--audio-dup`** — Audio plays on both the phone and PC (requires Android 13+, some apps may opt out).
 - Default (no flag) — Audio is captured from the phone and played on the PC only.
+
+Rebuild ./devbuild/app/scrcpy.exe from the same environment you used originally (e.g. MSYS2 MinGW64 where cc is on PATH). A stale binary would explain “still doesn’t work” after edits.
